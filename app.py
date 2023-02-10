@@ -365,4 +365,4 @@ with app.app_context():
 # Lancement de l'application
 if __name__ == "__main__":
     # Excecuter le serveur
-    app.run(debug=True)
+    app.run(host="0.0.0.0", debug=True)
