@@ -13,9 +13,9 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 app.config['CORS_HEADERS'] = 'Content-Type'
 
-username = "innovanalyse"
-password = "@2023#InnoVAnalyse"
-database = "innovanalyse_db"
+username = "myuser"
+password = "mypass1234"
+database = "mydb"
 
 app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{username}:{password}@localhost:5432/{database}"
 
