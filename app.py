@@ -13,9 +13,9 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 app.config['CORS_HEADERS'] = 'Content-Type'
 
-username = "myuser"
-password = "mypass1234"
-database = "mydb"
+username = "postgres"
+password = "judih007"
+database = "innovanalyse"
 
 app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{username}:{password}@localhost:5432/{database}"
 
@@ -34,28 +34,59 @@ api = Api(app)
 
 
 """  MODEL """
+# admin
+class Admin(db.Model):
+    __tablename__ = "admin"
+    id = db.Column(db.Integer, primary_key=True)
+    adminname = db.Column(db.String, unique=True, nullable=False)
+    email = db.Column(db.String)
+    password = db.Column(db.String)
+    role = db.Column(db.String)
+
+class AdminSchemas(ma.Schema):
+    class Meta:
+        fields = ("id", "adminname", "email", "password", "role")
+        model = Admin
+
+admin_schema = AdminSchemas()
+admin_schemas = AdminSchemas(many=True)
 
 # Utilisateur
 class User(db.Model):
     __tablename__ = "utilisateur"
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String, unique=True, nullable=False)
-    name = db.Column(db.String)
-    secteur = db.Column(db.String)
-    about = db.Column(db.String)
     email = db.Column(db.String)
-    contact = db.Column(db.String)
-    adresse = db.Column(db.String)
     password = db.Column(db.String)
     role = db.Column(db.String)
 
+    client_id = db.Column(db.Integer, db.ForeignKey('client.id'))
+    client = db.relationship("Client", backref=db.backref("client" , foreign_keys=[client_id]))
+
 class UserSchemas(ma.Schema):
     class Meta:
-        fields = ("id", "username","name","secteur","about", "email","contact","adresse", "password", "role")
+        fields = ("id", "username", "email", "password", "role", "client_id")
         model = User
 
 user_schema = UserSchemas()
 user_schemas = UserSchemas(many=True)
+
+class Client(db.Model):
+    __tablename__ = "client"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String)
+    secteur = db.Column(db.String)
+    about = db.Column(db.String)
+    contact = db.Column(db.String)
+    adresse = db.Column(db.String)
+
+class ClientSchemas(ma.Schema):
+    class Meta:
+        fields = ("id","name","secteur","about", "contact","adresse")
+        model = Client
+
+client_schema = ClientSchemas()
+client_schemas = ClientSchemas(many=True)
 
 
 # Feuille de temps
@@ -69,6 +100,7 @@ class Temps(db.Model):
     diplome = db.Column(db.String)
     etablissement = db.Column(db.String)
     annee = db.Column(db.String)
+    jeune = db.Column(db.String)
     fonction = db.Column(db.String)
     brut = db.Column(db.String)
     cadre = db.Column(db.String)
@@ -87,7 +119,7 @@ class Temps(db.Model):
 
 class TempsSchemas(ma.Schema):
     class Meta:
-        fields = ("id", "nom", "prenom","adresse" ,"contact" , "diplome", "etablissement", "annee",  "fonction", "brut", "cadre", "cotisation", "cotisationeligible", "salairecharge", "cheure", "cjours", "entrer", "sortie", "ticket", "user_id")
+        fields = ("id", "nom", "prenom","adresse" ,"contact" , "diplome", "etablissement", "annee","jeune",  "fonction", "brut", "cadre", "cotisation", "cotisationeligible", "salairecharge", "cheure", "cjours", "entrer", "sortie", "ticket", "user_id")
         model = Temps
 
 temps_schema = TempsSchemas()
@@ -143,14 +175,10 @@ class UserListRessource(Resource):
     def post(self):
         user = User(
             username = request.json["username"],
-            name = request.json["name"],
-            secteur= request.json["secteur"],
-            about = request.json["about"],
             email = request.json["email"],
-            contact = request.json["contact"],
-            adresse = request.json["adresse"],
             password = request.json["password"],
-            role = request.json["role"]
+            role = request.json["role"],
+            client_id = request.json["client_id"],
         )
         db.session.add(user)
         db.session.commit()
@@ -172,29 +200,17 @@ class UserProfilResource(Resource):
         if "username" in request.json :
             user.username = request.json["username"]
 
-        if "name" in request.json :
-            user.name = request.json["name"]
-
-        if "secteur" in request.json :
-            user.secteur = request.json["secteur"]
-
-        if "about" in request.json :
-            user.about = request.json["about"]
-
         if "email" in request.json:
             user.email = request.json["email"]
-
-        if "contact" in request.json :
-            user.contact = request.json["contact"]
-
-        if "adresse" in request.json :
-            user.adresse = request.json["adresse"]
 
         if "password" in request.json:
             user.password = request.json["password"]
 
         if "role" in request.json:
             user.password = request.json["role"]
+
+        if "client_id" in request.json:
+            user.client_id = request.json["client_id"]
 
         db.session.commit()
 
@@ -209,6 +225,125 @@ class UserProfilResource(Resource):
         return '', 204
 
 api.add_resource(UserProfilResource, '/utilisateurs/<int:id>')
+
+class AdminListRessource(Resource):
+    # Liste admin
+    def get(self):
+        admins = Admin.query.all()
+        return admin_schemas.dump(admins)
+
+    # Nouveau admin
+    def post(self):
+        admin = Admin(
+            adminname = request.json["username"],
+            email = request.json["email"],
+            password = request.json["password"],
+            role = request.json["role"]
+        )
+        db.session.add(admin)
+        db.session.commit()
+        return admin_schema.dump(admin)
+
+api.add_resource(AdminListRessource, '/admin' )
+
+# Profile d'admin
+class AdminProfilResource(Resource):
+    # Affiche profil
+    def get(self, id):
+        profil = Admin.query.get_or_404(id)
+        return admin_schema.dump(profil)
+
+    # Modifier un admin
+    def patch(self, id):
+        admin = Admin.query.get_or_404(id)
+
+        if "adminname" in request.json :
+            admin.adminname = request.json["adminname"]
+
+        if "email" in request.json:
+            admin.email = request.json["email"]
+
+        if "password" in request.json:
+            admin.password = request.json["password"]
+
+        if "role" in request.json:
+            admin.password = request.json["role"]
+
+        db.session.commit()
+
+        return admin_schema.dump(admin)
+
+    # Supprimer un utilisateur
+    def delete(self, id):
+        admin = Admin.query.get_or_404(id)
+
+        db.session.delete(admin)
+        db.session.commit()
+        return '', 204
+
+api.add_resource(AdminProfilResource, '/admin/<int:id>')
+
+class ClientListRessource(Resource):
+    # Liste client
+    def get(self):
+        client = Client.query.all()
+        return client_schemas.dump(client)
+
+    # Nouveau client
+    def post(self):
+        client = Client(
+            name = request.json["name"],
+            secteur= request.json["secteur"],
+            about = request.json["about"],
+            contact = request.json["contact"],
+            adresse = request.json["adresse"]
+        )
+        db.session.add(client)
+        db.session.commit()
+        return client_schema.dump(client)
+
+api.add_resource(ClientListRessource, '/client' )
+
+# Profile du client
+class ClientProfilResource(Resource):
+    # Affiche profil
+    def get(self, id):
+        profil = Client.query.get_or_404(id)
+        return client_schema.dump(profil)
+
+    # Modifier
+    def patch(self, id):
+        client = Client.query.get_or_404(id)
+
+        if "name" in request.json :
+            client.name = request.json["name"]
+
+        if "secteur" in request.json :
+            client.secteur = request.json["secteur"]
+
+        if "about" in request.json :
+            client.about = request.json["about"]
+
+        if "contact" in request.json :
+            client.contact = request.json["contact"]
+
+        if "adresse" in request.json :
+            client.adresse = request.json["adresse"]
+
+        db.session.commit()
+
+        return client_schema.dump(client)
+
+    # Supprimer un client
+    def delete(self, id):
+        client = Client.query.get_or_404(id)
+
+        db.session.delete(client)
+        db.session.commit()
+        return '', 204
+
+api.add_resource(ClientProfilResource, '/client/<int:id>')
+
 
 
 ## Feuille de temps
@@ -228,6 +363,7 @@ class TempsListRessource(Resource):
             diplome = request.json["diplome"],
             etablissement = request.json["etablissement"],
             annee = request.json["annee"],
+            jeune = request.json["jeune"],
             fonction = request.json["fonction"],
             brut = request.json["brut"],
             cadre = request.json["cadre"],
@@ -279,6 +415,9 @@ class EditTempsRessource(Resource):
 
         if "annee" in request.json:
             billetin.annee = request.json["annee"]
+
+        if "jeune" in request.json:
+            billetin.jeune = request.json["jeune"]
 
         if "fonction" in request.json:
             billetin.fonction = request.json["fonction"]
@@ -365,4 +504,4 @@ with app.app_context():
 # Lancement de l'application
 if __name__ == "__main__":
     # Excecuter le serveur
-    app.run(host="0.0.0.0", debug=True)
+    app.run(debug=True)
